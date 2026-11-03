@@ -2,24 +2,21 @@
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.util.ArrayList;
+import java.sql.*;
 
 public class Dashboard extends JFrame {
 
     Color blue = new Color(30, 65, 110);
     Color bg = new Color(242, 245, 250);
 
-    ArrayList<String[]> students = new ArrayList<>();
-    ArrayList<String> companies = new ArrayList<>();
-    ArrayList<String> jobs = new ArrayList<>();
-    ArrayList<String[]> applications = new ArrayList<>();
+    static Connection con;
 
     JPanel main;
     JLabel studentCount, companyCount, jobCount, appCount;
 
     Dashboard() {
 
-        setTitle("RPMS - Recruitment & Placement System");
+        setTitle("RPMS - Placement Management System");
         setSize(1000, 650);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -29,7 +26,7 @@ public class Dashboard extends JFrame {
         sidebar.setBackground(blue);
         sidebar.setPreferredSize(new Dimension(210, 650));
 
-        JLabel logo = new JLabel("   RPMS", JLabel.CENTER);
+        JLabel logo = new JLabel("RPMS", JLabel.CENTER);
         logo.setFont(new Font("Arial", Font.BOLD, 28));
         logo.setForeground(Color.WHITE);
         sidebar.add(logo);
@@ -42,14 +39,12 @@ public class Dashboard extends JFrame {
         };
 
         for (String item : menu) {
-
             JButton btn = new JButton(item);
             btn.setBackground(blue);
             btn.setForeground(Color.WHITE);
             btn.setFont(new Font("Arial", Font.BOLD, 13));
             btn.setFocusPainted(false);
             btn.setBorderPainted(false);
-
             btn.addActionListener(e -> action(item));
             sidebar.add(btn);
         }
@@ -65,7 +60,6 @@ public class Dashboard extends JFrame {
     }
 
     void action(String item) {
-
         switch (item) {
             case "Dashboard": dashboard(); break;
             case "Add Student": addStudent(); break;
@@ -90,32 +84,30 @@ public class Dashboard extends JFrame {
         JLabel title = new JLabel("Welcome to RPMS Dashboard");
         title.setFont(new Font("Arial", Font.BOLD, 27));
         title.setForeground(blue);
-
         main.add(title, BorderLayout.NORTH);
 
         JPanel cards = new JPanel(new GridLayout(2, 2, 20, 20));
         cards.setOpaque(false);
 
-        studentCount = new JLabel();
-        companyCount = new JLabel();
-        jobCount = new JLabel();
-        appCount = new JLabel();
+        studentCount = new JLabel("0");
+        companyCount = new JLabel("0");
+        jobCount = new JLabel("0");
+        appCount = new JLabel("0");
 
-        addCard(cards, "Total Students", studentCount, students.size());
-        addCard(cards, "Total Companies", companyCount, companies.size());
-        addCard(cards, "Available Jobs", jobCount, jobs.size());
-        addCard(cards, "Applications", appCount, applications.size());
+        addCard(cards, "Total Students", studentCount);
+        addCard(cards, "Total Companies", companyCount);
+        addCard(cards, "Available Jobs", jobCount);
+        addCard(cards, "Applications", appCount);
 
         main.add(cards, BorderLayout.CENTER);
-
-        JLabel footer = new JLabel("RPMS | Admin Panel");
-        main.add(footer, BorderLayout.SOUTH);
+        main.add(new JLabel("RPMS | Admin Panel"), BorderLayout.SOUTH);
 
         refresh();
+        main.revalidate();
+        main.repaint();
     }
 
-    void addCard(JPanel panel, String title,
-                  JLabel count, int value) {
+    void addCard(JPanel panel, String title, JLabel count) {
 
         JPanel card = new JPanel(new GridLayout(2, 1));
         card.setBackground(Color.WHITE);
@@ -125,20 +117,30 @@ public class Dashboard extends JFrame {
         heading.setFont(new Font("Arial", Font.BOLD, 19));
         heading.setForeground(blue);
 
-        count.setText(String.valueOf(value));
         count.setFont(new Font("Arial", Font.BOLD, 30));
-        count.setForeground(new Color(40, 120, 190));
+        count.setForeground(Color.BLUE);
 
         card.add(heading);
         card.add(count);
         panel.add(card);
     }
 
+    int getCount(String table) {
+        try {
+            Statement st = con.createStatement();
+            ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM " + table);
+            rs.next();
+            return rs.getInt(1);
+        } catch (SQLException e) {
+            return 0;
+        }
+    }
+
     void refresh() {
-        if (studentCount != null) studentCount.setText("" + students.size());
-        if (companyCount != null) companyCount.setText("" + companies.size());
-        if (jobCount != null) jobCount.setText("" + jobs.size());
-        if (appCount != null) appCount.setText("" + applications.size());
+        studentCount.setText("" + getCount("students"));
+        companyCount.setText("" + getCount("companies"));
+        jobCount.setText("" + getCount("jobs"));
+        appCount.setText("" + getCount("applications"));
     }
 
     void addStudent() {
@@ -154,9 +156,7 @@ public class Dashboard extends JFrame {
         };
 
         int result = JOptionPane.showConfirmDialog(
-            this, form, "Add Student",
-            JOptionPane.OK_CANCEL_OPTION
-        );
+            this, form, "Add Student", JOptionPane.OK_CANCEL_OPTION);
 
         if (result == JOptionPane.OK_OPTION) {
             try {
@@ -164,218 +164,242 @@ public class Dashboard extends JFrame {
                 String em = email.getText().trim();
                 double m = Double.parseDouble(marks.getText());
 
-                if (n.isEmpty() || em.isEmpty() ||
-                    !em.contains("@") || m < 0 || m > 100) {
+                if (n.isEmpty() || !em.contains("@") ||
+                    m < 0 || m > 100) {
                     throw new IllegalArgumentException();
                 }
 
-                students.add(new String[]{n, em, "" + m});
+                PreparedStatement ps = con.prepareStatement(
+                    "INSERT INTO students(name,email,percentage) VALUES(?,?,?)");
 
-                JOptionPane.showMessageDialog(this,
-                    "Student Added Successfully!");
+                ps.setString(1, n);
+                ps.setString(2, em);
+                ps.setDouble(3, m);
+                ps.executeUpdate();
 
+                JOptionPane.showMessageDialog(this, "Student Added!");
                 refresh();
 
             } catch (Exception e) {
                 JOptionPane.showMessageDialog(this,
-                    "Enter Valid Student Details!");
+                    "Error: " + e.getMessage());
             }
         }
     }
 
     void viewStudents() {
-
-        String[] columns = {"Name", "Email", "Percentage"};
-
-        DefaultTableModel model = new DefaultTableModel(columns, 0);
-
-        for (String[] s : students) {
-            model.addRow(s);
-        }
-
-        showTable("Student Details", model);
+        showTable("Student Details",
+            "SELECT id,name,email,percentage FROM students",
+            new String[]{"ID", "Name", "Email", "Percentage"});
     }
 
     void searchStudent() {
 
-        String email = JOptionPane.showInputDialog(
-            this, "Enter Student Email:"
-        );
+        String email = JOptionPane.showInputDialog(this, "Enter Email:");
 
         if (email == null) return;
 
-        for (String[] s : students) {
-            if (s[1].equalsIgnoreCase(email.trim())) {
-                JOptionPane.showMessageDialog(this,
-                    "Name: " + s[0] +
-                    "\nEmail: " + s[1] +
-                    "\nPercentage: " + s[2]);
-                return;
-            }
-        }
+        try {
+            PreparedStatement ps = con.prepareStatement(
+                "SELECT * FROM students WHERE email=?");
 
-        JOptionPane.showMessageDialog(this, "Student Not Found!");
+            ps.setString(1, email);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                JOptionPane.showMessageDialog(this,
+                    "Name: " + rs.getString("name") +
+                    "\nEmail: " + rs.getString("email") +
+                    "\nPercentage: " + rs.getDouble("percentage"));
+            } else {
+                JOptionPane.showMessageDialog(this, "Student Not Found!");
+            }
+        } catch (SQLException e) {
+            showError(e);
+        }
     }
 
     void addCompany() {
 
-        String name = JOptionPane.showInputDialog(
-            this, "Enter Company Name:"
-        );
+        String name = JOptionPane.showInputDialog(this, "Company Name:");
 
-        if (name != null && !name.trim().isEmpty()) {
-            companies.add(name.trim());
+        if (name == null || name.trim().isEmpty()) return;
+
+        try {
+            PreparedStatement ps = con.prepareStatement(
+                "INSERT INTO companies(name) VALUES(?)");
+
+            ps.setString(1, name.trim());
+            ps.executeUpdate();
+
             JOptionPane.showMessageDialog(this, "Company Added!");
             refresh();
+
+        } catch (SQLException e) {
+            showError(e);
         }
     }
 
     void viewCompanies() {
-
-        DefaultTableModel model =
-            new DefaultTableModel(new String[]{"Company Name"}, 0);
-
-        for (String c : companies) {
-            model.addRow(new String[]{c});
-        }
-
-        showTable("Company Details", model);
+        showTable("Companies",
+            "SELECT * FROM companies",
+            new String[]{"ID", "Company Name"});
     }
 
     void addJob() {
 
-        if (companies.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                "First Add a Company!");
-            return;
-        }
+        String job = JOptionPane.showInputDialog(this, "Enter Job Name:");
 
-        String job = JOptionPane.showInputDialog(
-            this, "Enter Job Name:"
-        );
+        if (job == null || job.trim().isEmpty()) return;
 
-        if (job != null && !job.trim().isEmpty()) {
-            jobs.add(job.trim());
+        try {
+            PreparedStatement ps = con.prepareStatement(
+                "INSERT INTO jobs(job_name) VALUES(?)");
+
+            ps.setString(1, job.trim());
+            ps.executeUpdate();
+
             JOptionPane.showMessageDialog(this, "Job Added!");
             refresh();
+
+        } catch (SQLException e) {
+            showError(e);
         }
     }
 
     void viewJobs() {
-
-        DefaultTableModel model =
-            new DefaultTableModel(new String[]{"Job Name"}, 0);
-
-        for (String j : jobs) {
-            model.addRow(new String[]{j});
-        }
-
-        showTable("Available Jobs", model);
+        showTable("Available Jobs",
+            "SELECT * FROM jobs",
+            new String[]{"ID", "Job Name"});
     }
 
     void applyJob() {
 
-        if (students.isEmpty() || jobs.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                "Add Student and Job First!");
-            return;
+        String student = JOptionPane.showInputDialog(
+            this, "Enter Student Name:");
+
+        if (student == null || student.trim().isEmpty()) return;
+
+        String job = JOptionPane.showInputDialog(
+            this, "Enter Job Name:");
+
+        if (job == null || job.trim().isEmpty()) return;
+
+        try {
+            PreparedStatement ps = con.prepareStatement(
+                "INSERT INTO applications(student_name,job_name) VALUES(?,?)");
+
+            ps.setString(1, student.trim());
+            ps.setString(2, job.trim());
+            ps.executeUpdate();
+
+            JOptionPane.showMessageDialog(this, "Application Submitted!");
+            refresh();
+
+        } catch (SQLException e) {
+            showError(e);
         }
-
-        String[] studentNames = new String[students.size()];
-        for (int i = 0; i < students.size(); i++) {
-            studentNames[i] = students.get(i)[0];
-        }
-
-        String student = (String) JOptionPane.showInputDialog(
-            this, "Select Student:", "Apply for Job",
-            JOptionPane.QUESTION_MESSAGE, null,
-            studentNames, studentNames[0]
-        );
-
-        if (student == null) return;
-
-        String[] jobNames = jobs.toArray(new String[0]);
-
-        String job = (String) JOptionPane.showInputDialog(
-            this, "Select Job:", "Apply for Job",
-            JOptionPane.QUESTION_MESSAGE, null,
-            jobNames, jobNames[0]
-        );
-
-        if (job == null) return;
-
-        applications.add(new String[]{student, job, "Applied"});
-
-        JOptionPane.showMessageDialog(this,
-            "Application Submitted Successfully!");
-
-        refresh();
     }
 
     void viewApplications() {
-
-        DefaultTableModel model =
-            new DefaultTableModel(
-                new String[]{"Student", "Job", "Status"}, 0
-            );
-
-        for (String[] a : applications) {
-            model.addRow(a);
-        }
-
-        showTable("Applications", model);
+        showTable("Applications",
+            "SELECT * FROM applications",
+            new String[]{"ID", "Student Name", "Job Name"});
     }
 
     void reports() {
 
         JOptionPane.showMessageDialog(this,
             "PLACEMENT REPORT\n\n" +
-            "Total Students: " + students.size() +
-            "\nTotal Companies: " + companies.size() +
-            "\nTotal Jobs: " + jobs.size() +
-            "\nTotal Applications: " + applications.size()
-        );
+            "Students: " + getCount("students") +
+            "\nCompanies: " + getCount("companies") +
+            "\nJobs: " + getCount("jobs") +
+            "\nApplications: " + getCount("applications"));
     }
 
-    void showTable(String title, DefaultTableModel model) {
+    void showTable(String title, String sql, String[] columns) {
 
-        JTable table = new JTable(model);
-        table.setRowHeight(28);
+        try {
+            DefaultTableModel model = new DefaultTableModel(columns, 0);
 
-        JScrollPane scroll = new JScrollPane(table);
+            Statement st = con.createStatement();
+            ResultSet rs = st.executeQuery(sql);
 
-        JFrame frame = new JFrame(title);
-        frame.add(scroll);
-        frame.setSize(600, 400);
-        frame.setLocationRelativeTo(this);
-        frame.setVisible(true);
+            while (rs.next()) {
+                Object[] row = new Object[columns.length];
+
+                for (int i = 0; i < columns.length; i++) {
+                    row[i] = rs.getObject(i + 1);
+                }
+
+                model.addRow(row);
+            }
+
+            JTable table = new JTable(model);
+            table.setRowHeight(28);
+
+            JFrame frame = new JFrame(title);
+            frame.add(new JScrollPane(table));
+            frame.setSize(650, 400);
+            frame.setLocationRelativeTo(this);
+            frame.setVisible(true);
+
+        } catch (SQLException e) {
+            showError(e);
+        }
+    }
+
+    void showError(Exception e) {
+        JOptionPane.showMessageDialog(this, e.getMessage(),
+            "Error", JOptionPane.ERROR_MESSAGE);
     }
 
     public static void main(String[] args) {
 
         SwingUtilities.invokeLater(() -> {
 
-            String username = JOptionPane.showInputDialog(
-                null, "Enter Admin Username:"
-            );
+            try {
+                String password = System.getenv("DB_PASSWORD");
 
-            if (username == null) return;
+                if (password == null || password.isEmpty()) {
+                    throw new Exception("Set DB_PASSWORD first!");
+                }
 
-            JPasswordField password = new JPasswordField();
+                con = DriverManager.getConnection(
+                    "jdbc:mysql://localhost:3306/rpms",
+                    "root", password);
 
-            int result = JOptionPane.showConfirmDialog(
-                null, password, "Admin Password",
-                JOptionPane.OK_CANCEL_OPTION
-            );
+                JOptionPane.showMessageDialog(null,
+                    "Database Connected Successfully!");
 
-            if (result == JOptionPane.OK_OPTION &&
-                username.equals("admin") &&
-                new String(password.getPassword()).equals("1234")) {
+                String username = JOptionPane.showInputDialog(
+                    null, "Admin Username:");
 
-                new Dashboard().setVisible(true);
+                if (username == null) {
+                    con.close();
+                    return;
+                }
 
-            } else {
-                JOptionPane.showMessageDialog(null, "Invalid Login!");
+                JPasswordField pass = new JPasswordField();
+
+                int result = JOptionPane.showConfirmDialog(
+                    null, pass, "Admin Password",
+                    JOptionPane.OK_CANCEL_OPTION);
+
+                if (result == JOptionPane.OK_OPTION &&
+                    username.equals("admin") &&
+                    new String(pass.getPassword()).equals("1234")) {
+
+                    new Dashboard().setVisible(true);
+
+                } else {
+                    JOptionPane.showMessageDialog(null, "Invalid Login!");
+                    con.close();
+                }
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null,
+                    "Database Error: " + e.getMessage());
             }
         });
     }
